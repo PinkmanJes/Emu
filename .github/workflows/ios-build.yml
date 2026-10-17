@@ -1,0 +1,61 @@
+
+name: NOVA iOS Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Find Xcode project
+        id: project
+        shell: bash
+        run: |
+          PROJECT=$(find . -name "*.xcodeproj" -print -quit)
+          WORKSPACE=$(find . -name "*.xcworkspace" -print -quit)
+
+          if [ -n "$WORKSPACE" ]; then
+            echo "type=workspace" >> "$GITHUB_OUTPUT"
+            echo "path=$WORKSPACE" >> "$GITHUB_OUTPUT"
+          elif [ -n "$PROJECT" ]; then
+            echo "type=project" >> "$GITHUB_OUTPUT"
+            echo "path=$PROJECT" >> "$GITHUB_OUTPUT"
+          else
+            echo "Не найден проект Xcode (.xcodeproj или .xcworkspace)"
+            exit 1
+          fi
+
+      - name: List schemes
+        run: |
+          if [ "${{ steps.project.outputs.type }}" = "workspace" ]; then
+            xcodebuild -list -workspace "${{ steps.project.outputs.path }}"
+          else
+            xcodebuild -list -project "${{ steps.project.outputs.path }}"
+          fi
+
+      - name: Build for iPhone
+        run: |
+          if [ "${{ steps.project.outputs.type }}" = "workspace" ]; then
+            xcodebuild \
+              -workspace "${{ steps.project.outputs.path }}" \
+              -scheme NOVA \
+              -sdk iphoneos \
+              -configuration Release \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO build
+          else
+            xcodebuild \
+              -project "${{ steps.project.outputs.path }}" \
+              -scheme NOVA \
+              -sdk iphoneos \
+              -configuration Release \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO build
+          fi
