@@ -206,6 +206,13 @@ struct LibraryView: View {
             .frame(
                 width: geometry.size.width,
                 height: geometry.size.height
+            .overlay(alignment: .topTrailing) {
+    Text("\(Int(geometry.size.width)) × \(Int(geometry.size.height))")
+        .font(.system(size: 14, weight: .bold))
+        .foregroundStyle(.yellow)
+        .padding(8)
+        .background(.black)
+}
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
