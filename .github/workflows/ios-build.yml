@@ -59,3 +59,24 @@ jobs:
               -derivedDataPath build \
               CODE_SIGNING_ALLOWED=NO build
           fi
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          APP_PATH=$(find build/Build/Products -type d -name "*.app" -print -quit)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "Не найден собранный .app"
+            exit 1
+          fi
+
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          /usr/bin/zip -r NOVA-unsigned.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-unsigned-IPA
+          path: NOVA-unsigned.ipa
+          if-no-files-found: error
