@@ -1,0 +1,85 @@
+
+name: iCube Engine Build Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/icube-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-icube:
+    runs-on: macos-15
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout iCube source
+        uses: actions/checkout@v4
+        with:
+          repository: Provenance-Emu/iCube
+          ref: develop
+          submodules: recursive
+          fetch-depth: 1
+          path: icube-src
+
+      - name: Show Xcode version
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Install build tools
+        run: |
+          brew install cmake ninja tuist bartycrouch
+
+      - name: Generate Xcode workspace
+        working-directory: icube-src/Source/iOS/App
+        run: tuist generate
+
+      - name: Build iCube for physical iPhone
+        working-directory: icube-src
+        run: |
+          xcodebuild \
+            -workspace Source/iOS/App/iCube.xcworkspace \
+            -scheme "iCube (NJB)" \
+            -configuration "Release (Non-Jailbroken)" \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$RUNNER_TEMP/iCubeDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PRODUCTS="$RUNNER_TEMP/iCubeDerivedData/Build/Products"
+          APP="$(find "$PRODUCTS" \
+            -maxdepth 3 \
+            -type d \
+            -name '*.app' \
+            -print -quit)"
+
+          if [ -z "$APP" ]; then
+            echo "ERROR: No .app bundle found"
+            find "$PRODUCTS" -maxdepth 3 -print
+            exit 1
+          fi
+
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/"
+
+          cd "$RUNNER_TEMP/ipa"
+          zip -qry "$RUNNER_TEMP/iCube-test-unsigned.ipa" Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iCube-test-unsigned
+          path: ${{ runner.temp }}/iCube-test-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
