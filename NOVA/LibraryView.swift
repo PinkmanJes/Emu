@@ -2,249 +2,675 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-struct Game: Identifiable {
-    let id = UUID()
-    let name: String
-    let url: URL
+private enum NOVATheme: String {
+    case classic
+    case liquidGlass
+}
+
+struct Game: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var title: String
+    var fileName: String
+    var fileURL: URL
+    var isFavorite: Bool = false
 }
 
 final class GameLibrary: ObservableObject {
-    @Published var games: [Game] = []
+    @Published var games: [Game] = [] {
+        didSet { save() }
+    }
 
-    func add(_ url: URL) {
-        guard !games.contains(where: { $0.url == url }) else {
-            return
+    private let storageKey = "nova.games"
+
+    init() {
+        load()
+    }
+
+    func addFile(_ url: URL) {
+        let access = url.startAccessingSecurityScopedResource()
+        defer {
+            if access { url.stopAccessingSecurityScopedResource() }
         }
 
-        games.append(
-            Game(
-                name: url.deletingPathExtension().lastPathComponent,
-                url: url
+        do {
+            let folder = FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+            )[0]
+
+            let destination = folder.appendingPathComponent(
+                url.lastPathComponent
             )
-        )
+
+            if !FileManager.default.fileExists(
+                atPath: destination.path
+            ) {
+                try FileManager.default.copyItem(
+                    at: url,
+                    to: destination
+                )
+            }
+
+            guard !games.contains(where: {
+                $0.fileName == destination.lastPathComponent
+            }) else { return }
+
+            games.append(
+                Game(
+                    title: destination.deletingPathExtension().lastPathComponent,
+                    fileName: destination.lastPathComponent,
+                    fileURL: destination
+                )
+            )
+        } catch {
+            print("NOVA import error:", error.localizedDescription)
+        }
+    }
+
+    func toggleFavorite(_ game: Game) {
+        guard let index = games.firstIndex(
+            where: { $0.id == game.id }
+        ) else { return }
+
+        games[index].isFavorite.toggle()
     }
 
     func remove(_ game: Game) {
         games.removeAll { $0.id == game.id }
     }
+
+    private func save() {
+        guard let data = try? JSONEncoder().encode(games) else {
+            return
+        }
+        UserDefaults.standard.set(data, forKey: storageKey)
+    }
+
+    private func load() {
+        guard
+            let data = UserDefaults.standard.data(forKey: storageKey),
+            let saved = try? JSONDecoder().decode([Game].self, from: data)
+        else { return }
+
+        games = saved.filter {
+            FileManager.default.fileExists(atPath: $0.fileURL.path)
+        }
+    }
 }
 
 struct LibraryView: View {
     @StateObject private var library = GameLibrary()
-    @State private var importing = false
-    @State private var errorMessage: String?
 
-    private let background = Color(red: 0.035, green: 0.04, blue: 0.075)
+    @AppStorage("nova.theme")
+    private var themeName = "classic"
+
+    @State private var searchText = ""
+    @State private var favoritesOnly = false
+    @State private var showingImporter = false
+
+    private var isGlass: Bool {
+        themeName == NOVATheme.liquidGlass.rawValue
+    }
+
+    private var backgroundColor: Color {
+        isGlass
+        ? Color(red: 0.035, green: 0.045, blue: 0.10)
+        : Color(red: 0.035, green: 0.04, blue: 0.075)
+    }
+
+    private var accent: Color {
+        isGlass
+        ? Color(red: 0.66, green: 0.57, blue: 1.0)
+        : Color.purple
+    }
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14)
+    ]
+
+    private var filteredGames: [Game] {
+        library.games.filter { game in
+            let matchesSearch = searchText.isEmpty ||
+                game.title.localizedCaseInsensitiveContains(searchText)
+
+            return matchesSearch &&
+                (!favoritesOnly || game.isFavorite)
+        }
+    }
 
     var body: some View {
         ZStack {
-            background.ignoresSafeArea()
+            background
 
             VStack(spacing: 0) {
                 header
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("ТВОЯ ИГРОВАЯ КОЛЛЕКЦИЯ")
-                                .font(.caption.bold())
-                                .tracking(2)
-                                .foregroundStyle(.cyan)
+                ScrollView(showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 22) {
+                        searchBar
+                        collectionHeader
 
-                            Text("Играй без границ.")
-                                .font(.system(size: 30, weight: .bold))
-                                .foregroundStyle(.white)
-
-                            Text("Все твои игры — в одном месте.")
-                                .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.6))
-                        }
-
-                        if library.games.isEmpty {
+                        if filteredGames.isEmpty {
                             emptyState
                         } else {
-                            LazyVGrid(
-                                columns: [
-                                    GridItem(.flexible(), spacing: 14),
-                                    GridItem(.flexible(), spacing: 14)
-                                ],
-                                spacing: 14
-                            ) {
-                                ForEach(library.games) { game in
-                                    gameCard(game)
+                            LazyVGrid(columns: columns, spacing: 15) {
+                                ForEach(filteredGames) { game in
+                                    GameCard(
+                                        game: game,
+                                        isGlass: isGlass,
+                                        accent: accent,
+                                        onFavorite: {
+                                            library.toggleFavorite(game)
+                                        },
+                                        onDelete: {
+                                            library.remove(game)
+                                        }
+                                    )
                                 }
                             }
                         }
                     }
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 22)
+                    .padding(.bottom, 40)
                 }
-
-                footer
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(background)
         .preferredColorScheme(.dark)
+        .animation(.easeInOut(duration: 0.25), value: themeName)
         .fileImporter(
-            isPresented: $importing,
+            isPresented: $showingImporter,
             allowedContentTypes: [.item],
             allowsMultipleSelection: true
         ) { result in
             switch result {
             case .success(let urls):
-                for url in urls {
-                    library.add(url)
-                }
+                urls.forEach { library.addFile($0) }
             case .failure(let error):
-                errorMessage = error.localizedDescription
+                print("NOVA picker error:", error.localizedDescription)
             }
-        }
-        .alert(
-            "Ошибка импорта",
-            isPresented: Binding(
-                get: { errorMessage != nil },
-                set: { if !$0 { errorMessage = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) {
-                errorMessage = nil
-            }
-        } message: {
-            Text(errorMessage ?? "")
         }
     }
+
+    // MARK: - Background
+
+    private var background: some View {
+        ZStack {
+            backgroundColor
+                .ignoresSafeArea()
+
+            if isGlass {
+                Circle()
+                    .fill(Color.purple.opacity(0.28))
+                    .frame(width: 260, height: 260)
+                    .blur(radius: 100)
+                    .offset(x: -120, y: -280)
+
+                Circle()
+                    .fill(Color.blue.opacity(0.20))
+                    .frame(width: 280, height: 280)
+                    .blur(radius: 110)
+                    .offset(x: 150, y: 100)
+
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.035),
+                        .clear,
+                        .purple.opacity(0.05)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "gamecontroller.fill")
-                .font(.system(size: 25, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 48, height: 48)
-                .background(
-                    LinearGradient(
-                        colors: [.cyan, .blue, .purple],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Image(systemName: "gamecontroller.fill")
+                        .foregroundStyle(accent)
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text("NOVA")
-                    .font(.system(size: 25, weight: .black))
-                    .tracking(3)
+                    Text("NOVA")
+                        .font(
+                            .system(
+                                size: 27,
+                                weight: .black,
+                                design: .rounded
+                            )
+                        )
+                        .tracking(2)
+                }
 
-                Text("GAME LIBRARY")
-                    .font(.system(size: 10, weight: .bold))
-                    .tracking(2)
-                    .foregroundStyle(.gray)
+                Text("YOUR GAME LIBRARY")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(2.2)
+                    .foregroundStyle(.white.opacity(0.48))
             }
 
-            Spacer(minLength: 8)
+            Spacer(minLength: 4)
+
+            // Theme selector
+            Menu {
+                Button {
+                    themeName = NOVATheme.classic.rawValue
+                } label: {
+                    Label(
+                        "NOVA Classic",
+                        systemImage: themeName == "classic"
+                            ? "checkmark.circle.fill"
+                            : "circle"
+                    )
+                }
+
+                Button {
+                    themeName = NOVATheme.liquidGlass.rawValue
+                } label: {
+                    Label(
+                        "Liquid Glass",
+                        systemImage: themeName == "liquidGlass"
+                            ? "checkmark.circle.fill"
+                            : "circle"
+                    )
+                }
+            } label: {
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background {
+                        if isGlass {
+                            Circle().fill(.ultraThinMaterial)
+                        } else {
+                            Circle().fill(Color.white.opacity(0.07))
+                        }
+                    }
+                    .overlay {
+                        Circle()
+                            .strokeBorder(
+                                .white.opacity(isGlass ? 0.30 : 0.08),
+                                lineWidth: 1
+                            )
+                    }
+            }
+            .accessibilityLabel("Change appearance")
 
             Button {
-                importing = true
+                showingImporter = true
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(width: 46, height: 46)
-                    .background(.cyan)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                    .font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background {
+                        if isGlass {
+                            Circle().fill(.ultraThinMaterial)
+                        } else {
+                            Circle().fill(accent.gradient)
+                        }
+                    }
+                    .overlay {
+                        Circle()
+                            .fill(accent.opacity(isGlass ? 0.20 : 0))
+                    }
+                    .overlay {
+                        Circle().strokeBorder(
+                            .white.opacity(isGlass ? 0.35 : 0),
+                            lineWidth: 1
+                        )
+                    }
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Import games")
         }
-        .foregroundStyle(.white)
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(.white.opacity(0.04))
+        .padding(.top, 14)
+        .padding(.bottom, 18)
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "square.stack.3d.up")
-                .font(.system(size: 42, weight: .light))
-                .foregroundStyle(.cyan)
-                .frame(width: 100, height: 100)
-                .background(.cyan.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 25))
+    // MARK: - Search
 
-            Text("Здесь пока пусто")
-                .font(.title3.bold())
-                .foregroundStyle(.white)
+    private var searchBar: some View {
+        HStack(spacing: 11) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.white.opacity(0.55))
 
-            Text("Импортируй файл игры, чтобы добавить его в библиотеку.")
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
+            TextField("Search your games...", text: $searchText)
+                .font(.system(size: 15))
+                .autocorrectionDisabled()
 
-            Button {
-                importing = true
-            } label: {
-                Label("Импортировать игру", systemImage: "folder")
-                    .font(.subheadline.bold())
-                    .foregroundStyle(.black)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 14)
-                    .background(.cyan)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(24)
-        .background(.white.opacity(0.04))
-        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .padding(.horizontal, 15)
+        .frame(height: 50)
+        .background {
+            if isGlass {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(.ultraThinMaterial)
+            } else {
+                RoundedRectangle(cornerRadius: 15)
+                    .fill(Color.white.opacity(0.055))
+            }
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: isGlass ? 18 : 15)
+                .strokeBorder(
+                    .white.opacity(isGlass ? 0.24 : 0.07),
+                    lineWidth: 1
+                )
         }
     }
 
-    private func gameCard(_ game: Game) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Image(systemName: "gamecontroller.fill")
-                .font(.system(size: 34))
-                .foregroundStyle(.cyan)
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
-                .background(.cyan.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+    // MARK: - Collection controls
 
-            Text(game.name)
-                .font(.subheadline.bold())
-                .foregroundStyle(.white)
-                .lineLimit(2)
-
-            Button(role: .destructive) {
-                library.remove(game)
-            } label: {
-                Label("Удалить", systemImage: "trash")
-                    .font(.caption)
-            }
-        }
-        .padding(12)
-        .background(.white.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-    }
-
-    private var footer: some View {
+    private var collectionHeader: some View {
         HStack {
-            Image(systemName: "square.stack.3d.up.fill")
-                .foregroundStyle(.cyan)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(favoritesOnly ? "FAVORITES" : "YOUR COLLECTION")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.8)
+                    .foregroundStyle(.white.opacity(0.55))
 
-            Text("NOVA EMULATOR")
-                .tracking(1.5)
+                Text("\(filteredGames.count) games")
+                    .font(
+                        .system(size: 24, weight: .bold, design: .rounded)
+                    )
+            }
 
             Spacer()
 
-            Text("\(library.games.count) игр")
-                .foregroundStyle(.white.opacity(0.6))
+            HStack(spacing: 4) {
+                filterButton("All", selected: !favoritesOnly) {
+                    favoritesOnly = false
+                }
+
+                filterButton("★", selected: favoritesOnly) {
+                    favoritesOnly = true
+                }
+            }
+            .padding(4)
+            .background {
+                if isGlass {
+                    Capsule().fill(.ultraThinMaterial)
+                } else {
+                    Capsule().fill(Color.white.opacity(0.06))
+                }
+            }
+            .overlay {
+                Capsule().strokeBorder(
+                    .white.opacity(isGlass ? 0.22 : 0.06),
+                    lineWidth: 1
+                )
+            }
         }
-        .font(.system(size: 10, weight: .bold))
-        .foregroundStyle(.white.opacity(0.75))
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(.white.opacity(0.04))
+    }
+
+    private func filterButton(
+        _ title: String,
+        selected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.white.opacity(selected ? 1 : 0.55))
+                .padding(.horizontal, 13)
+                .padding(.vertical, 9)
+                .background {
+                    if selected {
+                        Capsule()
+                            .fill(
+                                isGlass
+                                ? accent.opacity(0.38)
+                                : Color.purple.opacity(0.8)
+                            )
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Empty state
+
+    private var emptyState: some View {
+        VStack(spacing: 14) {
+            Image(
+                systemName: searchText.isEmpty
+                    ? "square.stack.3d.up"
+                    : "magnifyingglass"
+            )
+            .font(.system(size: 38))
+            .foregroundStyle(accent)
+            .frame(width: 86, height: 86)
+            .background {
+                if isGlass {
+                    RoundedRectangle(cornerRadius: 26)
+                        .fill(.ultraThinMaterial)
+                } else {
+                    RoundedRectangle(cornerRadius: 25)
+                        .fill(Color.purple.opacity(0.12))
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 25)
+                    .strokeBorder(
+                        .white.opacity(isGlass ? 0.25 : 0.06),
+                        lineWidth: 1
+                    )
+            }
+
+            Text(
+                searchText.isEmpty
+                    ? (favoritesOnly
+                       ? "No favorites yet"
+                       : "Your library is empty")
+                    : "No games found"
+            )
+            .font(.system(size: 19, weight: .bold))
+
+            Text(
+                searchText.isEmpty
+                    ? "Tap + to import game files from Files."
+                    : "Try another search."
+            )
+            .font(.system(size: 14))
+            .foregroundStyle(.white.opacity(0.52))
+            .multilineTextAlignment(.center)
+
+            if searchText.isEmpty && !favoritesOnly {
+                Button {
+                    showingImporter = true
+                } label: {
+                    Label("Import games", systemImage: "plus")
+                        .font(.system(size: 14, weight: .bold))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 13)
+                        .background {
+                            if isGlass {
+                                Capsule().fill(.ultraThinMaterial)
+                            } else {
+                                Capsule().fill(accent.gradient)
+                            }
+                        }
+                        .overlay {
+                            Capsule().strokeBorder(
+                                .white.opacity(isGlass ? 0.3 : 0),
+                                lineWidth: 1
+                            )
+                        }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 55)
+        .padding(.horizontal, 24)
+    }
+}
+
+// MARK: - Game card
+
+private struct GameCard: View {
+    let game: Game
+    let isGlass: Bool
+    let accent: Color
+    let onFavorite: () -> Void
+    let onDelete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: isGlass ? 20 : 17)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color(red: 0.30, green: 0.19, blue: 0.57),
+                                Color(red: 0.11, green: 0.12, blue: 0.30),
+                                Color(red: 0.055, green: 0.065, blue: 0.14)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                if isGlass {
+                    Circle()
+                        .fill(accent.opacity(0.38))
+                        .frame(width: 95, height: 95)
+                        .blur(radius: 30)
+                        .offset(x: -35, y: 20)
+
+                    LinearGradient(
+                        colors: [.white.opacity(0.16), .clear, .clear],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
+
+                Image(systemName: "gamecontroller.fill")
+                    .font(.system(size: 42, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.88))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                Button(action: onFavorite) {
+                    Image(
+                        systemName: game.isFavorite
+                            ? "star.fill"
+                            : "star"
+                    )
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(
+                        game.isFavorite ? .yellow : .white
+                    )
+                    .frame(width: 34, height: 34)
+                    .background {
+                        if isGlass {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.ultraThinMaterial)
+                        } else {
+                            RoundedRectangle(cornerRadius: 11)
+                                .fill(.black.opacity(0.3))
+                        }
+                    }
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 12)
+                            .strokeBorder(
+                                .white.opacity(isGlass ? 0.28 : 0),
+                                lineWidth: 1
+                            )
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(9)
+            }
+            .frame(height: 135)
+            .clipShape(RoundedRectangle(cornerRadius: isGlass ? 20 : 17))
+            .overlay {
+                RoundedRectangle(cornerRadius: isGlass ? 20 : 17)
+                    .strokeBorder(
+                        .white.opacity(isGlass ? 0.22 : 0.04),
+                        lineWidth: 1
+                    )
+            }
+
+            Text(game.title)
+                .font(.system(size: 14, weight: .bold))
+                .lineLimit(2)
+                .foregroundStyle(.white)
+                .padding(.top, 12)
+
+            Text(game.fileName)
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.42))
+                .lineLimit(1)
+                .padding(.top, 4)
+
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                Text("Imported")
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Menu {
+                    Button(action: onFavorite) {
+                        Label(
+                            game.isFavorite
+                                ? "Remove favorite"
+                                : "Add to favorites",
+                            systemImage: "star"
+                        )
+                    }
+
+                    Button(role: .destructive, action: onDelete) {
+                        Label(
+                            "Remove from library",
+                            systemImage: "trash"
+                        )
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .frame(width: 30, height: 28)
+                        .contentShape(Rectangle())
+                }
+            }
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.green.opacity(0.85))
+            .padding(.top, 12)
+        }
+        .padding(11)
+        .background {
+            if isGlass {
+                RoundedRectangle(cornerRadius: 23)
+                    .fill(.ultraThinMaterial)
+            } else {
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(Color.white.opacity(0.045))
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: isGlass ? 23 : 22)
+                .strokeBorder(
+                    .white.opacity(isGlass ? 0.22 : 0.065),
+                    lineWidth: 1
+                )
+        }
     }
 }
