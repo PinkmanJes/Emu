@@ -1,0 +1,29 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+		A10000000000000000000001 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastUpgradeCheck = 1600; }; buildConfigurationList = A10000000000000000000011; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ); mainGroup = A10000000000000000000002; productRefGroup = A10000000000000000000003; projectDirPath = ""; projectRoot = ""; targets = (A10000000000000000000004, ); };
+		A10000000000000000000002 /* Main group */ = {isa = PBXGroup; children = (A10000000000000000000005, A10000000000000000000006, A10000000000000000000003, ); sourceTree = "<group>"; };
+		A10000000000000000000003 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000007, ); name = Products; sourceTree = "<group>"; };
+		A10000000000000000000004 /* NOVA */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000012; buildPhases = (A10000000000000000000008, A10000000000000000000009, A10000000000000000000010, ); buildRules = (); dependencies = (); name = NOVA; productName = NOVA; productReference = A10000000000000000000007; productType = "com.apple.product-type.application"; };
+		A10000000000000000000005 /* NOVA group */ = {isa = PBXGroup; children = (A10000000000000000000013, A10000000000000000000014, ); path = NOVA; sourceTree = "<group>"; };
+		A10000000000000000000006 /* Frameworks */ = {isa = PBXGroup; children = (); name = Frameworks; sourceTree = "<group>"; };
+		A10000000000000000000007 /* NOVA.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NOVA.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000008 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000015, A10000000000000000000016, ); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000009 /* Frameworks phase */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000010 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000011 /* Project configs */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000017, A10000000000000000000018, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000012 /* Target configs */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000019, A10000000000000000000020, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000013 /* NOVAApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NOVAApp.swift; sourceTree = "<group>"; };
+		A10000000000000000000014 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		A10000000000000000000015 /* NOVAApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013; };
+		A10000000000000000000016 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014; };
+		A10000000000000000000017 /* Debug project config */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Debug; };
+		A10000000000000000000018 /* Release project config */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 16.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; }; name = Release; };
+		A10000000000000000000019 /* Debug target config */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = NOVA; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games"; IPHONEOS_DEPLOYMENT_TARGET = 16.0; MARKETING_VERSION = 0.1; PRODUCT_BUNDLE_IDENTIFIER = app.nova.emulator; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		A10000000000000000000020 /* Release target config */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = NOVA; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games"; IPHONEOS_DEPLOYMENT_TARGET = 16.0; MARKETING_VERSION = 0.1; PRODUCT_BUNDLE_IDENTIFIER = app.nova.emulator; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+	};
+	rootObject = A10000000000000000000001 /* Project object */;
+}
