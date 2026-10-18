@@ -1,18 +1,17 @@
 name: NOVA iOS Build
 
-‘on’:
-workflow_dispatch:
-push:
-branches:
-- main
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
-build:
-runs-on: macos-26
-
-steps:
-  - name: Checkout source
-    uses: actions/checkout@v4
+  build:
+    runs-on: macos-26
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
   - name: Show Xcode version
     run: |
       xcodebuild -version
