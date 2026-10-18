@@ -1,4 +1,3 @@
-
 name: iOS Build
 
 on:
@@ -15,79 +14,91 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show Xcode version
-        run: xcodebuild -version
-      swift --version
-      xcode-select -p
-  - name: Find Xcode project
-    id: project
-    shell: bash
-    run: |
-      PROJECT=$(find . -name "*.xcodeproj" -print -quit)
-      WORKSPACE=$(find . -name "*.xcworkspace" -print -quit)
-      if [ -n "$WORKSPACE" ]; then
-        echo "type=workspace" >> "$GITHUB_OUTPUT"
-        echo "path=$WORKSPACE" >> "$GITHUB_OUTPUT"
-      elif [ -n "$PROJECT" ]; then
-        echo "type=project" >> "$GITHUB_OUTPUT"
-        echo "path=$PROJECT" >> "$GITHUB_OUTPUT"
-      else
-        echo "Не найден проект Xcode (.xcodeproj или .xcworkspace)"
-        exit 1
-      fi
-  - name: List schemes
-    shell: bash
-    run: |
-      if [ "${{ steps.project.outputs.type }}" = "workspace" ]; then
-        xcodebuild -list -workspace "${{ steps.project.outputs.path }}"
-      else
-        xcodebuild -list -project "${{ steps.project.outputs.path }}"
-      fi
-  - name: Build for iPhone
-    shell: bash
-    run: |
-      set -o pipefail
-      if [ "${{ steps.project.outputs.type }}" = "workspace" ]; then
-        xcodebuild \
-          -workspace "${{ steps.project.outputs.path }}" \
-          -scheme NOVA \
-          -sdk iphoneos \
-          -configuration Release \
-          -derivedDataPath build \
-          CODE_SIGNING_ALLOWED=NO \
-          build 2>&1 | tee build.log
-      else
-        xcodebuild \
-          -project "${{ steps.project.outputs.path }}" \
-          -scheme NOVA \
-          -sdk iphoneos \
-          -configuration Release \
-          -derivedDataPath build \
-          CODE_SIGNING_ALLOWED=NO \
-          build 2>&1 | tee build.log
-      fi
-  - name: Upload build log
-    if: always()
-    uses: actions/upload-artifact@v4
-    with:
-      name: NOVA-build-log
-      path: build.log
-      if-no-files-found: ignore
-  - name: Package unsigned IPA
-    shell: bash
-    run: |
-      APP_PATH=$(find build/Build/Products -type d -name "*.app" -print -quit)
-      if [ -z "$APP_PATH" ]; then
-        echo "Не найден собранный .app"
-        exit 1
-      fi
-      rm -rf Payload NOVA-unsigned.ipa
-      mkdir -p Payload
-      cp -R "$APP_PATH" Payload/
-      /usr/bin/zip -r NOVA-unsigned.ipa Payload
-  - name: Upload IPA artifact
-    uses: actions/upload-artifact@v4
-    with:
-      name: NOVA-unsigned-IPA
-      path: NOVA-unsigned.ipa
-      if-no-files-found: error
+      - name: Show development tools
+        shell: bash
+        run: |
+          xcodebuild -version
+          swift --version
+          xcode-select -p
+
+      - name: Find Xcode project
+        id: project
+        shell: bash
+        run: |
+          PROJECT=$(find . -name "*.xcodeproj" -not -path "*/Pods/*" -print -quit)
+          WORKSPACE=$(find . -name "*.xcworkspace" -not -path "*/Pods/*" -print -quit)
+
+          if [ -n "$WORKSPACE" ]; then
+            echo "type=workspace" >> "$GITHUB_OUTPUT"
+            echo "path=$WORKSPACE" >> "$GITHUB_OUTPUT"
+          elif [ -n "$PROJECT" ]; then
+            echo "type=project" >> "$GITHUB_OUTPUT"
+            echo "path=$PROJECT" >> "$GITHUB_OUTPUT"
+          else
+            echo "No Xcode project or workspace found"
+            exit 1
+          fi
+
+      - name: List schemes
+        shell: bash
+        run: |
+          if [ "${{ steps.project.outputs.type }}" = "workspace" ]; then
+            xcodebuild -list -workspace "${{ steps.project.outputs.path }}"
+          else
+            xcodebuild -list -project "${{ steps.project.outputs.path }}"
+          fi
+
+      - name: Build for iPhone
+        shell: bash
+        run: |
+          set -o pipefail
+
+          if [ "${{ steps.project.outputs.type }}" = "workspace" ]; then
+            xcodebuild \
+              -workspace "${{ steps.project.outputs.path }}" \
+              -scheme NOVA \
+              -sdk iphoneos \
+              -configuration Release \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO \
+              build 2>&1 | tee build.log
+          else
+            xcodebuild \
+              -project "${{ steps.project.outputs.path }}" \
+              -scheme NOVA \
+              -sdk iphoneos \
+              -configuration Release \
+              -derivedDataPath build \
+              CODE_SIGNING_ALLOWED=NO \
+              build 2>&1 | tee build.log
+          fi
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-build-log
+          path: build.log
+          if-no-files-found: ignore
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          APP_PATH=$(find build/Build/Products -type d -name "*.app" -print -quit)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "No built .app found"
+            exit 1
+          fi
+
+          rm -rf Payload NOVA-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          /usr/bin/zip -r NOVA-unsigned.ipa Payload
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NOVA-unsigned-IPA
+          path: NOVA-unsigned.ipa
+          if-no-files-found: error
