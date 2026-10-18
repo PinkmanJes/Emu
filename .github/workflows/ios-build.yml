@@ -1,4 +1,5 @@
-name: NOVA iOS Build
+
+name: iOS Build
 
 on:
   workflow_dispatch:
@@ -8,13 +9,14 @@ on:
 
 jobs:
   build:
-    runs-on: macos-26
+    runs-on: macos-latest
+
     steps:
-      - name: Checkout source
+      - name: Checkout repository
         uses: actions/checkout@v4
-  - name: Show Xcode version
-    run: |
-      xcodebuild -version
+
+      - name: Show Xcode version
+        run: xcodebuild -version
       swift --version
       xcode-select -p
   - name: Find Xcode project
